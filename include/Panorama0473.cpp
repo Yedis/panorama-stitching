@@ -21,7 +21,6 @@ bool Panorama0473::makePanorama(std::vector<cv::Mat> &img_vec, cv::Mat &img_out,
     for (int i = 0; i < img_vec.size(); ++i) {
         img_cylinder.push_back(cylindrical(img_vec[i], f));
     }
-    random_shuffle(img_cylinder.begin(), img_cylinder.end());
     Mat img_stitch = img_cylinder[0];
 
     for (int i = 1; i < img_cylinder.size(); ++i) {

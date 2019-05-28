@@ -16,6 +16,7 @@ int main() {
     vector<Mat> img_vec;
     cout << "Starting load images" << endl;
     for (int i = 1538; i < 1550; ++i) {
+//    for (int i = 1549; i > 1537; --i) {
         String path = dir + "/DSC0" + to_string(i) + ".JPG";
         cout << "Load image path: " + path << endl;
         Mat image = imread(path, CV_LOAD_IMAGE_COLOR);
