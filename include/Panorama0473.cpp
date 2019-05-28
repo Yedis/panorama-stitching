@@ -12,50 +12,58 @@ using namespace std;
 
 
 Mat stitch_left(Mat image1, Mat image2, vector<DMatch> matches, vector<KeyPoint>kp1,  vector<KeyPoint> kp2){
-        vector<Point2f> keypoints1, keypoints2;
-        for (int i = 0; i < matches.size(); i++) {
-            keypoints1.push_back(kp1[matches[i].queryIdx].pt);
-            keypoints2.push_back(kp2[matches[i].trainIdx].pt);
-        }
+    vector<Point2f> keypoints1, keypoints2;
+    for (int i = 0; i < matches.size(); i++) {
+        keypoints1.push_back(kp1[matches[i].queryIdx].pt);
+        keypoints2.push_back(kp2[matches[i].trainIdx].pt);
+    }
 
-        // calculate H
-        Mat H_1 = findHomography(keypoints2, keypoints1, RANSAC);
-        Mat H_2 = findHomography(keypoints1, keypoints2, RANSAC);
+    // calculate H
+    Mat H_1 = findHomography(keypoints2, keypoints1, RANSAC);
+    Mat H_2 = findHomography(keypoints1, keypoints2, RANSAC);
 
-        // stitchedImage
-        vector<Point2f> corners_1(4);
-        vector<Point2f> corners_2(4);
-        corners_1[0] = Point2f(0, 0);
-        corners_1[1] = Point2f((float)image1.cols, 0);
-        corners_1[2] = Point2f((float)image1.cols, (float)image1.rows);
-        corners_1[3] = Point2f(0, (float)image1.rows);
+    // stitchedImage
+    vector<Point2f> corners_1(4);
+    vector<Point2f> corners_2(4);
+    corners_1[0] = Point2f(0, 0);
+    corners_1[1] = Point2f((float)image1.cols, 0);
+    corners_1[2] = Point2f((float)image1.cols, (float)image1.rows);
+    corners_1[3] = Point2f(0, (float)image1.rows);
 
-        perspectiveTransform(corners_1, corners_2, H_2);
-        int down_rows = (int)min(corners_2[0].y, corners_2[1].y);
-        down_rows = min(0, down_rows) * -1;
-        int right_cols = (int)min(corners_2[0].x, corners_2[3].x);
-        right_cols = min(0, right_cols) * -1;
+    perspectiveTransform(corners_1, corners_2, H_2);
+    int down_rows = (int)min(corners_2[0].y, corners_2[1].y);
+    down_rows = min(0, down_rows) * -1;
+    int right_cols = (int)min(corners_2[0].x, corners_2[3].x);
+    right_cols = min(0, right_cols) * -1;
 
-        Mat stitch_img = Mat::zeros(image2.rows+down_rows, image2.cols+right_cols, CV_8UC3);
-        image2.copyTo(Mat(stitch_img, Rect(right_cols, down_rows, image2.cols, image2.rows)));
-        for (int i = 0; i < stitch_img.rows; ++i) {
-            for (int j = 0; j < stitch_img.cols; ++j) {
-                if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0))
-                    continue;
-                int x0 = j - right_cols;
-                int y0 = i - down_rows;
-                vector<Point2f> pix, dst;
-                pix.emplace_back(x0, y0);
-                perspectiveTransform(pix, dst, H_1);
-                Point2f pos = dst[0];
-                int x = (int) floor(pos.x);
-                int y = (int) floor(pos.y);
-                if (0 < y && y < image1.rows && 0 < x && x < image1.cols && image1.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
-                    Vec3b c = image1.at<Vec3b>(y, x);
-                    stitch_img.at<Vec3b>(i, j) = c;
-                }
+    Mat stitch_img = Mat::zeros(image2.rows+down_rows, image2.cols+right_cols, CV_8UC3);
+    image2.copyTo(Mat(stitch_img, Rect(right_cols, down_rows, image2.cols, image2.rows)));
+
+//    imshow("tmp", stitch_img);
+//    waitKey(0);
+
+    for (int i = 0; i < stitch_img.rows; ++i) {
+        for (int j = 0; j < stitch_img.cols; ++j) {
+            if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0))
+                continue;
+            int x0 = j - right_cols;
+            int y0 = i - down_rows;
+            vector<Point2f> pix, dst;
+            pix.emplace_back(x0, y0);
+            perspectiveTransform(pix, dst, H_1);
+            Point2f pos = dst[0];
+            int x = (int) floor(pos.x);
+            int y = (int) floor(pos.y);
+            if (0 < y && y < image1.rows && 0 < x && x < image1.cols && image1.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
+                Vec3b c = image1.at<Vec3b>(y, x);
+                stitch_img.at<Vec3b>(i, j) = c;
             }
         }
+    }
+
+//    imshow("tmp", stitch_img);
+//    waitKey(0);
+
     return stitch_img;
 }
 
@@ -168,8 +176,9 @@ bool Panorama0473::makePanorama(std::vector<cv::Mat> &img_vec, cv::Mat &img_out,
             }
         }
 
-//        Mat stitch_img = stitch_left(image1, image2, matches_good, kp1, kp2);
-        if (i < img_vec.size() / 2){
+//        Mat stitch_img = stitch_right(image1, image2, matches_good, kp1, kp2);
+//        img_stitch = stitch_img;
+        if (i < img_vec.size() / 2 + 1){
             Mat stitch_img = stitch_left(image1, image2, matches_good, kp1, kp2);
             img_stitch = stitch_img;
         }
