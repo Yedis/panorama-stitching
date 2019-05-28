@@ -227,6 +227,7 @@ bool Panorama0473::makePanorama(std::vector<cv::Mat> &img_vec, cv::Mat &img_out,
 
     }
     imshow("ResultImage.jpg", img_stitch);
+    imwrite("ResultImage.jpg", img_stitch);
     waitKey(0);
 }
 
