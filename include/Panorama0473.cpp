@@ -1,7 +1,3 @@
-//
-// Created by yedis on 19-5-27.
-//
-
 #include <algorithm>
 #include "opencv2/opencv.hpp"
 #include <opencv2/nonfree/features2d.hpp>
@@ -30,6 +26,7 @@ Mat stitch_left(Mat image1, Mat image2, vector<DMatch> matches, vector<KeyPoint>
     corners_1[2] = Point2f((float)image1.cols, (float)image1.rows);
     corners_1[3] = Point2f(0, (float)image1.rows);
 
+    // perform transform for corners, which helps to identify the size of siitched image
     perspectiveTransform(corners_1, corners_2, H_2);
     int down_rows = (int)min(corners_2[0].y, corners_2[1].y);
     down_rows = min(0, down_rows) * -1;
@@ -39,30 +36,56 @@ Mat stitch_left(Mat image1, Mat image2, vector<DMatch> matches, vector<KeyPoint>
     Mat stitch_img = Mat::zeros(image2.rows+down_rows, image2.cols+right_cols, CV_8UC3);
     image2.copyTo(Mat(stitch_img, Rect(right_cols, down_rows, image2.cols, image2.rows)));
 
-//    imshow("tmp", stitch_img);
-//    waitKey(0);
-
+    // set value
     for (int i = 0; i < stitch_img.rows; ++i) {
+        // smooth
         for (int j = 0; j < stitch_img.cols; ++j) {
-            if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0))
-                continue;
+            // basic
             int x0 = j - right_cols;
             int y0 = i - down_rows;
             vector<Point2f> pix, dst;
             pix.emplace_back(x0, y0);
             perspectiveTransform(pix, dst, H_1);
             Point2f pos = dst[0];
+
+            if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0)){
+                // smooth
+                if (i >= 0 && i < (int)max(corners_2[1].x, corners_2[2].x) && j >= 0 && j < (int)max(corners_2[2].y, corners_2[2].y)){
+                    double weight;
+                    int x = (int) floor(pos.x);
+                    int y = (int) floor(pos.y);
+                    weight=(double)i/(int)max(corners_2[1].x, corners_2[2].x) * 0.1;
+                    stitch_img.at<Vec3b>(i,j) = weight * image2.at<Vec3b>(i,j) + (1-weight) * image1.at<Vec3b>(y, x);
+                }
+                continue;
+            }
+            // nearest
+            /*
             int x = (int) floor(pos.x);
             int y = (int) floor(pos.y);
             if (0 < y && y < image1.rows && 0 < x && x < image1.cols && image1.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
                 Vec3b c = image1.at<Vec3b>(y, x);
                 stitch_img.at<Vec3b>(i, j) = c;
             }
+             */
+            // Bilinear interpolation: for most point, use nearset interpolation; however, some use nearest
+            int x = (int) floor(pos.x);
+            int y = (int) floor(pos.y);
+            if (0 < y && y < image1.rows && 0 < x && x < image1.cols && image1.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
+                if (0 < y+1 && y+1 < image1.rows && 0 < x+1 && x+1 < image1.cols
+                    && image1.at<Vec3b>(y, x+1) != Vec3b(0, 0, 0) && image1.at<Vec3b>(y+1, x) != Vec3b(0, 0, 0) && image1.at<Vec3b>(y+1, x+1) != Vec3b(0, 0, 0)){
+                    double u = pos.y - y;
+                    double v = pos.x - x;
+                    stitch_img.at<Vec3b>(i, j) = image1.at<Vec3b>(y, x) * (1 - u) * (1 - v) + image1.at<Vec3b>(y + 1, x) * u * (1 - v)
+                            + image1.at<Vec3b>(y, x+1) * (1 - u) * v + image1.at<Vec3b>(y, x) * u * v;
+                } else{
+                    Vec3b c = image1.at<Vec3b>(y, x);
+                    stitch_img.at<Vec3b>(i, j) = c;
+                }
+            }
+
         }
     }
-
-//    imshow("tmp", stitch_img);
-//    waitKey(0);
 
     return stitch_img;
 }
@@ -86,6 +109,7 @@ Mat stitch_right(Mat image1, Mat image2, vector<DMatch> matches, vector<KeyPoint
     corners_2[2] = Point2f((float)image2.cols, (float)image2.rows);
     corners_2[3] = Point2f(0, (float)image2.rows);
 
+    // perform transform for corners, which helps to identify the size of siitched image
     perspectiveTransform(corners_2, corners_1, H_1);
     int down_rows = (int)min(corners_1[0].y, corners_1[1].y);
     down_rows = min(0, down_rows) * -1;
@@ -94,25 +118,41 @@ Mat stitch_right(Mat image1, Mat image2, vector<DMatch> matches, vector<KeyPoint
 
     Mat stitch_img = Mat::zeros(image1.rows+down_rows, right_cols, CV_8UC3);
     image1.copyTo(Mat(stitch_img, Rect(0, down_rows, image1.cols, image1.rows)));
-
-//    imshow("tmp", stitch_img);
-//    waitKey(0);
-
+    // set value
     for (int i = 0; i < stitch_img.rows; ++i) {
         for (int j = 0; j < stitch_img.cols; ++j) {
-            if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0))
-                continue;
             int x0 = j;
             int y0 = i - down_rows;
             vector<Point2f> pix, dst;
             pix.emplace_back(x0, y0);
             perspectiveTransform(pix, dst, H_2);
             Point2f pos = dst[0];
+            if (stitch_img.at<Vec3b>(i, j) != Vec3b(0, 0, 0)){
+                continue;
+            }
+            // nearest
+            /*
             int x = (int) floor(pos.x);
             int y = (int) floor(pos.y);
             if (0 < y && y < image2.rows && 0 < x && x < image2.cols && image2.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
                 Vec3b c = image2.at<Vec3b>(y, x);
                 stitch_img.at<Vec3b>(i, j) = c;
+            }
+             */
+            // Bilinear interpolation: for most point, use nearset interpolation; however, some use nearest
+            int x = (int) floor(pos.x);
+            int y = (int) floor(pos.y);
+            if (0 < y && y < image2.rows && 0 < x && x < image2.cols && image2.at<Vec3b>(y, x) != Vec3b(0, 0, 0)) {
+                if (0 < y+1 && y+1 < image2.rows && 0 < x+1 && x+1 < image2.cols
+                    && image2.at<Vec3b>(y, x+1) != Vec3b(0, 0, 0) && image2.at<Vec3b>(y+1, x) != Vec3b(0, 0, 0) && image2.at<Vec3b>(y+1, x+1) != Vec3b(0, 0, 0)){
+                    double u = pos.y - y;
+                    double v = pos.x - x;
+                    stitch_img.at<Vec3b>(i, j) = image2.at<Vec3b>(y, x) * (1 - u) * (1 - v) + image2.at<Vec3b>(y + 1, x) * u * (1 - v)
+                                                 + image2.at<Vec3b>(y, x+1) * (1 - u) * v + image2.at<Vec3b>(y, x) * u * v;
+                } else{
+                    Vec3b c = image2.at<Vec3b>(y, x);
+                    stitch_img.at<Vec3b>(i, j) = c;
+                }
             }
         }
     }
@@ -176,8 +216,6 @@ bool Panorama0473::makePanorama(std::vector<cv::Mat> &img_vec, cv::Mat &img_out,
             }
         }
 
-//        Mat stitch_img = stitch_right(image1, image2, matches_good, kp1, kp2);
-//        img_stitch = stitch_img;
         if (i < img_vec.size() / 2 + 1){
             Mat stitch_img = stitch_left(image1, image2, matches_good, kp1, kp2);
             img_stitch = stitch_img;
@@ -186,10 +224,6 @@ bool Panorama0473::makePanorama(std::vector<cv::Mat> &img_vec, cv::Mat &img_out,
             Mat stitch_img = stitch_right(image1, image2, matches_good, kp1, kp2);
             img_stitch = stitch_img;
         }
-
-//         vis stitch image
-//        imshow("ResultImage.jpg", stitch_img);
-//        waitKey(0);
 
     }
     imshow("ResultImage.jpg", img_stitch);
